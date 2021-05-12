@@ -71,7 +71,9 @@ from ansible.module_utils.six import with_metaclass
 try:
     from ansible.executor.interpreter_discovery import discover_interpreter
 except ImportError:
-    discover_interpreter = lambda action,interpreter_name,discovery_mode,task_vars: '/usr/bin/python'
+    discover_interpreter = (
+        lambda action, interpreter_name, discovery_mode, task_vars: "/usr/bin/python"
+    )
 
 try:
     from ansible.utils.unsafe_proxy import AnsibleUnsafeText
@@ -91,39 +93,44 @@ def run_interpreter_discovery_if_necessary(s, task_vars, action, rediscover_pyth
     # keep trying different interpreters until we don't error
     if action._finding_python_interpreter:
         return action._possible_python_interpreter
-    
-    if s in ['auto', 'auto_legacy', 'auto_silent', 'auto_legacy_silent']:
-        # python is the only supported interpreter_name as of Ansible 2.8.8
-        interpreter_name = 'python'
-        discovered_interpreter_config = u'discovered_interpreter_%s' % interpreter_name
-        
-        if task_vars.get('ansible_facts') is None:
-           task_vars['ansible_facts'] = {}
 
-        if rediscover_python and task_vars.get('ansible_facts', {}).get(discovered_interpreter_config):
+    if s in ["auto", "auto_legacy", "auto_silent", "auto_legacy_silent"]:
+        # python is the only supported interpreter_name as of Ansible 2.8.8
+        interpreter_name = "python"
+        discovered_interpreter_config = "discovered_interpreter_%s" % interpreter_name
+
+        if task_vars.get("ansible_facts") is None:
+            task_vars["ansible_facts"] = {}
+
+        if rediscover_python and task_vars.get("ansible_facts", {}).get(
+            discovered_interpreter_config
+        ):
             # if we're rediscovering python then chances are we're running something like a docker connection
             # this will handle scenarios like running a playbook that does stuff + then dynamically creates a docker container,
             # then runs the rest of the playbook inside that container, and then rerunning the playbook again
             action._rediscovered_python = True
 
             # blow away the discovered_interpreter_config cache and rediscover
-            del task_vars['ansible_facts'][discovered_interpreter_config]
+            del task_vars["ansible_facts"][discovered_interpreter_config]
 
-        if discovered_interpreter_config not in task_vars['ansible_facts']:
+        if discovered_interpreter_config not in task_vars["ansible_facts"]:
             action._finding_python_interpreter = True
             # fake pipelining so discover_interpreter can be happy
             action._connection.has_pipelining = True
-            s = AnsibleUnsafeText(discover_interpreter(
-                action=action,
-                interpreter_name=interpreter_name,
-                discovery_mode=s,
-                task_vars=task_vars))
+            s = AnsibleUnsafeText(
+                discover_interpreter(
+                    action=action,
+                    interpreter_name=interpreter_name,
+                    discovery_mode=s,
+                    task_vars=task_vars,
+                )
+            )
 
             # cache discovered interpreter
-            task_vars['ansible_facts'][discovered_interpreter_config] = s
+            task_vars["ansible_facts"][discovered_interpreter_config] = s
             action._connection.has_pipelining = False
         else:
-            s = task_vars['ansible_facts'][discovered_interpreter_config]
+            s = task_vars["ansible_facts"][discovered_interpreter_config]
 
         # propagate discovered interpreter as fact
         action._discovered_interpreter_key = discovered_interpreter_config
@@ -136,18 +143,18 @@ def run_interpreter_discovery_if_necessary(s, task_vars, action, rediscover_pyth
 def parse_python_path(s, task_vars, action, rediscover_python):
     """
     Given the string set for ansible_python_interpeter, parse it using shell
-    syntax and return an appropriate argument vector. If the value detected is 
+    syntax and return an appropriate argument vector. If the value detected is
     one of interpreter discovery then run that first. Caches python interpreter
     discovery value in `facts_from_task_vars` like how Ansible handles this.
     """
     if not s:
         # if python_path doesn't exist, default to `auto` and attempt to discover it
-        s = 'auto'
+        s = "auto"
 
     s = run_interpreter_discovery_if_necessary(s, task_vars, action, rediscover_python)
     # if unable to determine python_path, fallback to '/usr/bin/python'
     if not s:
-        s = '/usr/bin/python'
+        s = "/usr/bin/python3"
 
     return ansible.utils.shlex.shlex_split(s)
 
@@ -397,6 +404,7 @@ class PlayContextSpec(Spec):
     PlayContext. It is used for normal connections and delegate_to connections,
     and should always be accurate.
     """
+
     def __init__(self, connection, play_context, transport, inventory_name):
         self._connection = connection
         self._play_context = play_context
@@ -437,7 +445,7 @@ class PlayContextSpec(Spec):
         return self._play_context.port
 
     def python_path(self, rediscover_python=False):
-        s = self._connection.get_task_var('ansible_python_interpreter')
+        s = self._connection.get_task_var("ansible_python_interpreter")
         # #511, #536: executor/module_common.py::_get_shebang() hard-wires
         # "/usr/bin/python" as the default interpreter path if no other
         # interpreter is specified.
@@ -445,7 +453,8 @@ class PlayContextSpec(Spec):
             s,
             task_vars=self._task_vars,
             action=self._action,
-            rediscover_python=rediscover_python)
+            rediscover_python=rediscover_python,
+        )
 
     def private_key_file(self):
         return self._play_context.private_key_file
@@ -458,20 +467,20 @@ class PlayContextSpec(Spec):
 
     def ansible_ssh_timeout(self):
         return (
-            self._connection.get_task_var('ansible_timeout') or
-            self._connection.get_task_var('ansible_ssh_timeout') or
-            self.timeout()
+            self._connection.get_task_var("ansible_timeout")
+            or self._connection.get_task_var("ansible_ssh_timeout")
+            or self.timeout()
         )
 
     def ssh_args(self):
         return [
             mitogen.core.to_text(term)
             for s in (
-                getattr(self._play_context, 'ssh_args', ''),
-                getattr(self._play_context, 'ssh_common_args', ''),
-                getattr(self._play_context, 'ssh_extra_args', '')
+                getattr(self._play_context, "ssh_args", ""),
+                getattr(self._play_context, "ssh_common_args", ""),
+                getattr(self._play_context, "ssh_extra_args", ""),
             )
-            for term in ansible.utils.shlex.shlex_split(s or '')
+            for term in ansible.utils.shlex.shlex_split(s or "")
         ]
 
     def become_exe(self):
@@ -481,74 +490,76 @@ class PlayContextSpec(Spec):
         # For consistency in the tests, here we make older Ansibles behave like
         # newer Ansibles.
         exe = self._play_context.become_exe
-        if exe is None and self._play_context.become_method == 'sudo':
-            exe = 'sudo'
+        if exe is None and self._play_context.become_method == "sudo":
+            exe = "sudo"
         return exe
 
     def sudo_args(self):
         return [
             mitogen.core.to_text(term)
             for term in ansible.utils.shlex.shlex_split(
-                first_true((
-                    self._play_context.become_flags,
-                    # Ansible <=2.7.
-                    getattr(self._play_context, 'sudo_flags', ''),
-                    # Ansible <=2.3.
-                    getattr(C, 'DEFAULT_BECOME_FLAGS', ''),
-                    getattr(C, 'DEFAULT_SUDO_FLAGS', '')
-                ), default='')
+                first_true(
+                    (
+                        self._play_context.become_flags,
+                        # Ansible <=2.7.
+                        getattr(self._play_context, "sudo_flags", ""),
+                        # Ansible <=2.3.
+                        getattr(C, "DEFAULT_BECOME_FLAGS", ""),
+                        getattr(C, "DEFAULT_SUDO_FLAGS", ""),
+                    ),
+                    default="",
+                )
             )
         ]
 
     def mitogen_via(self):
-        return self._connection.get_task_var('mitogen_via')
+        return self._connection.get_task_var("mitogen_via")
 
     def mitogen_kind(self):
-        return self._connection.get_task_var('mitogen_kind')
+        return self._connection.get_task_var("mitogen_kind")
 
     def mitogen_mask_remote_name(self):
-        return self._connection.get_task_var('mitogen_mask_remote_name')
+        return self._connection.get_task_var("mitogen_mask_remote_name")
 
     def mitogen_buildah_path(self):
-        return self._connection.get_task_var('mitogen_buildah_path')
+        return self._connection.get_task_var("mitogen_buildah_path")
 
     def mitogen_docker_path(self):
-        return self._connection.get_task_var('mitogen_docker_path')
+        return self._connection.get_task_var("mitogen_docker_path")
 
     def mitogen_kubectl_path(self):
-        return self._connection.get_task_var('mitogen_kubectl_path')
+        return self._connection.get_task_var("mitogen_kubectl_path")
 
     def mitogen_lxc_path(self):
-        return self._connection.get_task_var('mitogen_lxc_path')
+        return self._connection.get_task_var("mitogen_lxc_path")
 
     def mitogen_lxc_attach_path(self):
-        return self._connection.get_task_var('mitogen_lxc_attach_path')
+        return self._connection.get_task_var("mitogen_lxc_attach_path")
 
     def mitogen_lxc_info_path(self):
-        return self._connection.get_task_var('mitogen_lxc_info_path')
+        return self._connection.get_task_var("mitogen_lxc_info_path")
 
     def mitogen_ssh_keepalive_interval(self):
-        return self._connection.get_task_var('mitogen_ssh_keepalive_interval')
+        return self._connection.get_task_var("mitogen_ssh_keepalive_interval")
 
     def mitogen_ssh_keepalive_count(self):
-        return self._connection.get_task_var('mitogen_ssh_keepalive_count')
+        return self._connection.get_task_var("mitogen_ssh_keepalive_count")
 
     def mitogen_machinectl_path(self):
-        return self._connection.get_task_var('mitogen_machinectl_path')
+        return self._connection.get_task_var("mitogen_machinectl_path")
 
     def mitogen_ssh_debug_level(self):
-        return self._connection.get_task_var('mitogen_ssh_debug_level')
+        return self._connection.get_task_var("mitogen_ssh_debug_level")
 
     def mitogen_ssh_compression(self):
-        return self._connection.get_task_var('mitogen_ssh_compression')
+        return self._connection.get_task_var("mitogen_ssh_compression")
 
     def extra_args(self):
         return self._connection.get_extra_args()
 
     def ansible_doas_exe(self):
-        return (
-            self._connection.get_task_var('ansible_doas_exe') or
-            os.environ.get('ANSIBLE_DOAS_EXE')
+        return self._connection.get_task_var("ansible_doas_exe") or os.environ.get(
+            "ANSIBLE_DOAS_EXE"
         )
 
 
@@ -569,8 +580,17 @@ class MitogenViaSpec(Spec):
     having a configruation problem with connection delegation, the answer to
     your problem lies in the method implementations below!
     """
-    def __init__(self, inventory_name, host_vars, task_vars, become_method, become_user,
-                 play_context, action):
+
+    def __init__(
+        self,
+        inventory_name,
+        host_vars,
+        task_vars,
+        become_method,
+        become_user,
+        play_context,
+        action,
+    ):
         """
         :param str inventory_name:
             The inventory name of the intermediary machine, i.e. not the target
@@ -604,10 +624,7 @@ class MitogenViaSpec(Spec):
         self._action = action
 
     def transport(self):
-        return (
-            self._host_vars.get('ansible_connection') or
-            C.DEFAULT_TRANSPORT
-        )
+        return self._host_vars.get("ansible_connection") or C.DEFAULT_TRANSPORT
 
     def inventory_name(self):
         return self._inventory_name
@@ -615,16 +632,16 @@ class MitogenViaSpec(Spec):
     def remote_addr(self):
         # play_context.py::MAGIC_VARIABLE_MAPPING
         return (
-            self._host_vars.get('ansible_ssh_host') or
-            self._host_vars.get('ansible_host') or
-            self._inventory_name
+            self._host_vars.get("ansible_ssh_host")
+            or self._host_vars.get("ansible_host")
+            or self._inventory_name
         )
 
     def remote_user(self):
         return (
-            self._host_vars.get('ansible_ssh_user') or
-            self._host_vars.get('ansible_user') or
-            C.DEFAULT_REMOTE_USER
+            self._host_vars.get("ansible_ssh_user")
+            or self._host_vars.get("ansible_user")
+            or C.DEFAULT_REMOTE_USER
         )
 
     def become(self):
@@ -632,9 +649,9 @@ class MitogenViaSpec(Spec):
 
     def become_method(self):
         return (
-            self._become_method or
-            self._host_vars.get('ansible_become_method') or
-            C.DEFAULT_BECOME_METHOD
+            self._become_method
+            or self._host_vars.get("ansible_become_method")
+            or C.DEFAULT_BECOME_METHOD
         )
 
     def become_user(self):
@@ -642,25 +659,25 @@ class MitogenViaSpec(Spec):
 
     def become_pass(self):
         return optional_secret(
-            self._host_vars.get('ansible_become_password') or
-            self._host_vars.get('ansible_become_pass')
+            self._host_vars.get("ansible_become_password")
+            or self._host_vars.get("ansible_become_pass")
         )
 
     def password(self):
         return optional_secret(
-            self._host_vars.get('ansible_ssh_pass') or
-            self._host_vars.get('ansible_password')
+            self._host_vars.get("ansible_ssh_pass")
+            or self._host_vars.get("ansible_password")
         )
 
     def port(self):
         return (
-            self._host_vars.get('ansible_ssh_port') or
-            self._host_vars.get('ansible_port') or
-            C.DEFAULT_REMOTE_PORT
+            self._host_vars.get("ansible_ssh_port")
+            or self._host_vars.get("ansible_port")
+            or C.DEFAULT_REMOTE_PORT
         )
 
     def python_path(self, rediscover_python=False):
-        s = self._host_vars.get('ansible_python_interpreter')
+        s = self._host_vars.get("ansible_python_interpreter")
         # #511, #536: executor/module_common.py::_get_shebang() hard-wires
         # "/usr/bin/python" as the default interpreter path if no other
         # interpreter is specified.
@@ -668,21 +685,19 @@ class MitogenViaSpec(Spec):
             s,
             task_vars=self._task_vars,
             action=self._action,
-            rediscover_python=rediscover_python)
+            rediscover_python=rediscover_python,
+        )
 
     def private_key_file(self):
         # TODO: must come from PlayContext too.
         return (
-            self._host_vars.get('ansible_ssh_private_key_file') or
-            self._host_vars.get('ansible_private_key_file') or
-            C.DEFAULT_PRIVATE_KEY_FILE
+            self._host_vars.get("ansible_ssh_private_key_file")
+            or self._host_vars.get("ansible_private_key_file")
+            or C.DEFAULT_PRIVATE_KEY_FILE
         )
 
     def ssh_executable(self):
-        return (
-            self._host_vars.get('ansible_ssh_executable') or
-            C.ANSIBLE_SSH_EXECUTABLE
-        )
+        return self._host_vars.get("ansible_ssh_executable") or C.ANSIBLE_SSH_EXECUTABLE
 
     def timeout(self):
         # TODO: must come from PlayContext too.
@@ -690,9 +705,9 @@ class MitogenViaSpec(Spec):
 
     def ansible_ssh_timeout(self):
         return (
-            self._host_vars.get('ansible_timeout') or
-            self._host_vars.get('ansible_ssh_timeout') or
-            self.timeout()
+            self._host_vars.get("ansible_timeout")
+            or self._host_vars.get("ansible_ssh_timeout")
+            or self.timeout()
         )
 
     def ssh_args(self):
@@ -700,19 +715,19 @@ class MitogenViaSpec(Spec):
             mitogen.core.to_text(term)
             for s in (
                 (
-                    self._host_vars.get('ansible_ssh_args') or
-                    getattr(C, 'ANSIBLE_SSH_ARGS', None) or
-                    os.environ.get('ANSIBLE_SSH_ARGS')
+                    self._host_vars.get("ansible_ssh_args")
+                    or getattr(C, "ANSIBLE_SSH_ARGS", None)
+                    or os.environ.get("ANSIBLE_SSH_ARGS")
                     # TODO: ini entry. older versions.
                 ),
                 (
-                    self._host_vars.get('ansible_ssh_common_args') or
-                    os.environ.get('ANSIBLE_SSH_COMMON_ARGS')
+                    self._host_vars.get("ansible_ssh_common_args")
+                    or os.environ.get("ANSIBLE_SSH_COMMON_ARGS")
                     # TODO: ini entry.
                 ),
                 (
-                    self._host_vars.get('ansible_ssh_extra_args') or
-                    os.environ.get('ANSIBLE_SSH_EXTRA_ARGS')
+                    self._host_vars.get("ansible_ssh_extra_args")
+                    or os.environ.get("ANSIBLE_SSH_EXTRA_ARGS")
                     # TODO: ini entry.
                 ),
             )
@@ -721,68 +736,64 @@ class MitogenViaSpec(Spec):
         ]
 
     def become_exe(self):
-        return (
-            self._host_vars.get('ansible_become_exe') or
-            C.DEFAULT_BECOME_EXE
-        )
+        return self._host_vars.get("ansible_become_exe") or C.DEFAULT_BECOME_EXE
 
     def sudo_args(self):
         return [
             mitogen.core.to_text(term)
             for s in (
-                self._host_vars.get('ansible_sudo_flags') or '',
-                self._host_vars.get('ansible_become_flags') or '',
+                self._host_vars.get("ansible_sudo_flags") or "",
+                self._host_vars.get("ansible_become_flags") or "",
             )
             for term in ansible.utils.shlex.shlex_split(s)
         ]
 
     def mitogen_via(self):
-        return self._host_vars.get('mitogen_via')
+        return self._host_vars.get("mitogen_via")
 
     def mitogen_kind(self):
-        return self._host_vars.get('mitogen_kind')
+        return self._host_vars.get("mitogen_kind")
 
     def mitogen_mask_remote_name(self):
-        return self._host_vars.get('mitogen_mask_remote_name')
+        return self._host_vars.get("mitogen_mask_remote_name")
 
     def mitogen_buildah_path(self):
-        return self._host_vars.get('mitogen_buildah_path')
+        return self._host_vars.get("mitogen_buildah_path")
 
     def mitogen_docker_path(self):
-        return self._host_vars.get('mitogen_docker_path')
+        return self._host_vars.get("mitogen_docker_path")
 
     def mitogen_kubectl_path(self):
-        return self._host_vars.get('mitogen_kubectl_path')
+        return self._host_vars.get("mitogen_kubectl_path")
 
     def mitogen_lxc_path(self):
-        return self.host_vars.get('mitogen_lxc_path')
+        return self.host_vars.get("mitogen_lxc_path")
 
     def mitogen_lxc_attach_path(self):
-        return self._host_vars.get('mitogen_lxc_attach_path')
+        return self._host_vars.get("mitogen_lxc_attach_path")
 
     def mitogen_lxc_info_path(self):
-        return self._host_vars.get('mitogen_lxc_info_path')
+        return self._host_vars.get("mitogen_lxc_info_path")
 
     def mitogen_ssh_keepalive_interval(self):
-        return self._host_vars.get('mitogen_ssh_keepalive_interval')
+        return self._host_vars.get("mitogen_ssh_keepalive_interval")
 
     def mitogen_ssh_keepalive_count(self):
-        return self._host_vars.get('mitogen_ssh_keepalive_count')
+        return self._host_vars.get("mitogen_ssh_keepalive_count")
 
     def mitogen_machinectl_path(self):
-        return self._host_vars.get('mitogen_machinectl_path')
+        return self._host_vars.get("mitogen_machinectl_path")
 
     def mitogen_ssh_debug_level(self):
-        return self._host_vars.get('mitogen_ssh_debug_level')
+        return self._host_vars.get("mitogen_ssh_debug_level")
 
     def mitogen_ssh_compression(self):
-        return self._host_vars.get('mitogen_ssh_compression')
+        return self._host_vars.get("mitogen_ssh_compression")
 
     def extra_args(self):
         return []  # TODO
 
     def ansible_doas_exe(self):
-        return (
-            self._host_vars.get('ansible_doas_exe') or
-            os.environ.get('ANSIBLE_DOAS_EXE')
+        return self._host_vars.get("ansible_doas_exe") or os.environ.get(
+            "ANSIBLE_DOAS_EXE"
         )
